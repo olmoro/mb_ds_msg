@@ -17,7 +17,7 @@
 // ---------------------------------------------------------------------------------
 //                                  Версии 
 // ---------------------------------------------------------------------------------
-#define APP_VERSION "MB_DS_MSG 20250404.02"
+#define APP_VERSION "MB_DS_MSG 20250404.03"
 // 202500404.02:  Received PDU (5 bytes): 06 00 01 00 01    RAM:  3.4%  Flash: 12.8%  
 // 202500403.01:  Проверка DeepSeek msg                     RAM:  3.4%  Flash: 12.8%
 
@@ -57,13 +57,7 @@
 #define CONFIG_EVENTS_TASK_STACK_SIZE  1024 * 4
 #define CONFIG_EVENTS_TASK_PRIORITY    10
 
-// // Структура для хранения Modbus пакета
-// typedef struct
-// {
-//     uint8_t function;     // Modbus функция
-//     uint8_t *data;        // Указатель на данные
-//     uint16_t data_length; // Длина данных
-// } modbus_packet_t;
+
 
 // // // Буферы для регистров
 // // static uint16_t holding_regs[10] = {0};  // Holding Registers (4xxxx)

@@ -56,7 +56,6 @@ void uart_init()
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,  // RTS для управления направлением DE/RE !!
-        //.source_clk = UART_SCLK_DEFAULT};
         .rx_flow_ctrl_thresh = 122,
     };
 
@@ -66,23 +65,7 @@ void uart_init()
     intr_alloc_flags = ESP_INTR_FLAG_IRAM;
 #endif
 
-    // ESP_ERROR_CHECK(uart_param_config(MB_PORT_NUM, &uart_cfg));
-    // ESP_ERROR_CHECK(uart_set_pin(
-    //     MB_PORT_NUM,
-    //     CONFIG_MB_UART_TXD,
-    //     CONFIG_MB_UART_RXD,
-    //     CONFIG_MB_UART_RTS,
-    //     UART_PIN_NO_CHANGE));
 
-    /*esp_err_t uart_driver_install(
-    uart_port_t uart_num,
-    int rx_buffer_size,
-    int tx_buffer_size,
-    int queue_size,
-    QueueHandle_t* uart_queue,
-    int intr_alloc_flags);
-    */
-    //ESP_ERROR_CHECK(uart_driver_install(MB_PORT_NUM, 512, 512, 20, NULL, 0));
     ESP_ERROR_CHECK(uart_driver_install(MB_PORT_NUM, BUF_SIZE, BUF_SIZE, QUEUE_SIZE, NULL, 0));
 
     ESP_ERROR_CHECK(uart_set_pin(MB_PORT_NUM, CONFIG_MB_UART_TXD, CONFIG_MB_UART_RXD, CONFIG_MB_UART_RTS, 32));   // IO32 свободен (трюк)
@@ -135,7 +118,7 @@ void uart_receive_task(void *arg) {
                 frame_length = 0;
                 continue;
             }
-    ledsOn();
+    ledsRed();
             // Проверка адреса
             if(frame_buffer[0] != SLAVE_ADDRESS) {
                 ESP_LOGW(TAG, "Address mismatch: 0x%02X", frame_buffer[0]);
@@ -144,7 +127,7 @@ void uart_receive_task(void *arg) {
                 frame_length = 0;
                 continue;
             }
-    ledsGreen();
+  //  ledsGreen();
             // Проверка CRC
             uint16_t received_crc = (frame_buffer[frame_length-1] << 8) | frame_buffer[frame_length-2];
             uint16_t calculated_crc = mb_crc16(frame_buffer, frame_length - 2);
@@ -192,7 +175,8 @@ void uart_receive_task(void *arg) {
 
 // Задача обработки PDU
 void pdu_processing_task(void *arg) {
-    while(1) {
+    while(1) 
+    {
         pdu_packet_t pdu;
         if(xQueueReceive(modbus_queue, &pdu, portMAX_DELAY)) {
             // Обработка данных
@@ -201,7 +185,9 @@ void pdu_processing_task(void *arg) {
                 printf("%02X ", pdu.data[i]);
             }
             printf("\n");
-            
+           
+    ledsGreen();        
+
             free(pdu.data); // Освобождение памяти
         }
     }
