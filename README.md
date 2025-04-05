@@ -1284,3 +1284,397 @@ bool check_crc(const uint8_t *data, size_t length) {
     return (received_crc == calculated_crc);
 }
 ```
+===================================================================================================================
+ESP_IDF v5.4 modbus RTU slave вернуть содержимое сырого фрейма. Код должен содержать все проверки.
+                                                        (Неудачно заданный вопрос)
+
+Вот пример кода для ESP-IDF v5.4, который реализует Modbus RTU Slave и выводит сырые данные принятых фреймов. Этот код использует отдельную задачу для чтения UART и определения фреймов по таймауту:
+
+```c
+#include "esp_log.h"
+#include "mbcontroller.h"
+#include "driver/uart.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "soc/uart_struct.h"
+
+static const char *TAG = "MODBUS_SLAVE";
+
+// Настройки UART для Modbus
+#define MB_UART_NUM           UART_NUM_2
+#define MB_UART_BAUD_RATE     9600
+#define MB_UART_RXD_PIN       16
+#define MB_UART_TXD_PIN       17
+#define MB_UART_RTS_PIN       18
+
+// Базовые настройки Modbus
+#define MB_SLAVE_ADDR         1
+#define MB_INPUT_REG_CNT      100
+
+// Базовый буфер для сырых данных
+static uint8_t raw_frame[256];
+static size_t frame_length = 0;
+static portMUX_TYPE frame_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// Функция инициализации Modbus Slave
+static esp_err_t init_modbus_slave() {
+    // Конфигурация коммуникационных параметров
+    mb_communication_info_t comm_info = {
+        .port = MB_UART_NUM,
+        .baudrate = MB_UART_BAUD_RATE,
+        .parity = MB_PARITY_NONE,
+        .mode = MB_MODE_RTU
+    };
+
+    // Инициализация Modbus контроллера
+    esp_err_t err = mbc_slave_init(MB_PORT_RTU, &comm_info);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Slave init failed: 0x%x", err);
+        return err;
+    }
+
+    // Настройка параметров слейва
+    mbc_slave_setup((void*)&comm_info);
+
+    // Регистрация регистров (пример)
+    mbc_slave_set_descriptor(MB_INPUT_REG_START, MB_INPUT_REG_CNT, NULL, NULL);
+
+    // Запуск Modbus
+    err = mbc_slave_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Slave start failed: 0x%x", err);
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+// Задача для чтения сырых данных UART
+static void uart_sniffer_task(void *arg) {
+    const int timeout_ms = 4; // 3.5 символа при 9600 бод
+    uint8_t buffer[128];
+    TickType_t last_rx_time = xTaskGetTickCount();
+    
+    while (1) {
+        int len = uart_read_bytes(MB_UART_NUM, buffer, sizeof(buffer), pdMS_TO_TICKS(1));
+        if (len > 0) {
+            portENTER_CRITICAL(&frame_mux);
+            if (frame_length + len <= sizeof(raw_frame)) {
+                memcpy(&raw_frame[frame_length], buffer, len);
+                frame_length += len;
+            } else {
+                frame_length = 0;
+                ESP_LOGW(TAG, "Frame buffer overflow");
+            }
+            portEXIT_CRITICAL(&frame_mux);
+            last_rx_time = xTaskGetTickCount();
+        }
+
+        // Проверка таймаута
+        if (frame_length > 0 && (xTaskGetTickCount() - last_rx_time) >= pdMS_TO_TICKS(timeout_ms)) {
+            portENTER_CRITICAL(&frame_mux);
+            ESP_LOGI(TAG, "Raw frame received (%d bytes):", frame_length);
+            for (int i = 0; i < frame_length; i++) {
+                ESP_LOGI(TAG, "0x%02X ", raw_frame[i]);
+            }
+            frame_length = 0; // Сброс буфера
+            portEXIT_CRITICAL(&frame_mux);
+        }
+        
+        vTaskDelay(1);
+    }
+}
+
+void app_main(void) {
+    // Инициализация NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Инициализация Modbus
+    if (init_modbus_slave() != ESP_OK) {
+        ESP_LOGE(TAG, "Modbus initialization failed");
+        return;
+    }
+
+    // Настройка UART
+    uart_config_t uart_config = {
+        .baud_rate = MB_UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    
+    ESP_ERROR_CHECK(uart_driver_install(MB_UART_NUM, 256, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(MB_UART_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(MB_UART_NUM, MB_UART_TXD_PIN, MB_UART_RXD_PIN, MB_UART_RTS_PIN, UART_PIN_NO_CHANGE));
+
+    // Создаем задачу для сниффера UART
+    xTaskCreate(uart_sniffer_task, "uart_sniffer", 4096, NULL, 10, NULL);
+
+    ESP_LOGI(TAG, "Modbus RTU Slave initialized");
+}
+```
+
+Важные замечания:
+
+1. **Конфликт ресурсов**: Modbus библиотека и задача сниффера используют один и тот же UART порт, что может привести к конфликтам. На практике это может вызывать потерю данных.
+
+2. **Таймаут фрейма**: Таймаут 4 мс рассчитан для скорости 9600 бод. Для других скоростей нужно пересчитывать.
+
+3. **Буфер данных**: Используется критическая секция для защиты общего буфера данных.
+
+4. **Производительность**: Задача сниффера работает с приоритетом 10, что может повлиять на работу Modbus стека.
+
+5. **Проверка CRC**: В примере не выполняется проверка CRC фрейма.
+
+Для использования этого кода:
+1. Подключите Modbus оборудование согласно выбранным пинам
+2. Настройте правильные параметры UART
+3. При необходимости адаптируйте обработку сырых данных
+
+Это решение следует использовать с осторожностью, так как оно может нарушить работу стандартного Modbus стека. Для промышленного применения рекомендуется использовать специализированные анализаторы протоколов.
+
+====================================================================================================================================
+ESP_IDF v5.4 modbus slave получает фрейм и через очередь отправляет на обработку другой задаче. Которая возвращает обработанный фрейм, который надо вернуть в качестве ответа.  Код должен содержать все проверки.
+
+Вот пример реализации Modbus RTU Slave на ESP-IDF v5.4 с использованием очередей для обработки фреймов в отдельной задаче. Код включает проверки ошибок и синхронизацию:
+
+```c
+#include "esp_log.h"
+#include "driver/uart.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "string.h"
+#include "sys/param.h"
+
+static const char *TAG = "MODBUS_SLAVE";
+
+// Настройки UART
+#define MB_UART_NUM        UART_NUM_2
+#define MB_UART_BAUD_RATE  9600
+#define MB_UART_RXD_PIN    16
+#define MB_UART_TXD_PIN    17
+#define MB_QUEUE_SIZE      5
+#define MB_FRAME_TIMEOUT_MS 4  // 3.5 символа при 9600 бод
+
+// Структура для передачи фреймов между задачами
+typedef struct {
+    uint8_t *data;
+    size_t length;
+} mb_frame_t;
+
+static QueueHandle_t frame_queue = NULL;
+static SemaphoreHandle_t uart_mutex = NULL;
+
+// CRC16 для Modbus (полином 0x8005, начальное значение 0xFFFF)
+uint16_t crc16_modbus(const uint8_t *data, size_t length) {
+    uint16_t crc = 0xFFFF;
+    for (size_t i = 0; i < length; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            if (crc & 0x0001) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc;
+}
+
+// Задача обработки фреймов
+static void frame_processor_task(void *arg) {
+    while(1) {
+        mb_frame_t frame;
+        if(xQueueReceive(frame_queue, &frame, portMAX_DELAY) {
+            // Проверка минимальной длины фрейма
+            if(frame.length < 4) {
+                ESP_LOGE(TAG, "Invalid frame length: %d", frame.length);
+                free(frame.data);
+                continue;
+            }
+
+            // Проверка CRC
+            uint16_t received_crc = *(uint16_t*)&frame.data[frame.length-2];
+            uint16_t calculated_crc = crc16_modbus(frame.data, frame.length-2);
+            
+            if(received_crc != calculated_crc) {
+                ESP_LOGE(TAG, "CRC error: received 0x%04X vs calculated 0x%04X",
+                        received_crc, calculated_crc);
+                free(frame.data);
+                continue;
+            }
+
+            ESP_LOGI(TAG, "Valid frame received (%d bytes)", frame.length);
+            
+            // Формирование ответа (пример)
+            uint8_t response[8] = {
+                frame.data[0],  // Адрес
+                frame.data[1],  // Функция
+                0x02,          // Длина данных
+                0x01,          // Данные
+                0x02,          // Данные
+                0x00, 0x00     // Место для CRC
+            };
+            
+            // Расчет CRC для ответа
+            uint16_t response_crc = crc16_modbus(response, 4);
+            response[5] = response_crc & 0xFF;
+            response[6] = response_crc >> 8;
+
+            // Отправка ответа с синхронизацией
+            xSemaphoreTake(uart_mutex, portMAX_DELAY);
+            uart_write_bytes(MB_UART_NUM, (const char*)response, sizeof(response));
+            xSemaphoreGive(uart_mutex);
+
+            free(frame.data);
+        }
+    }
+}
+
+// Задача чтения UART
+static void uart_reader_task(void *arg) {
+    uint8_t *frame_buffer = malloc(256);
+    size_t frame_index = 0;
+    TickType_t last_rx_time = xTaskGetTickCount();
+
+    while(1) {
+        uint8_t buf[128];
+        int len = uart_read_bytes(MB_UART_NUM, buf, sizeof(buf), pdMS_TO_TICKS(1));
+        
+        if(len > 0) {
+            // Копирование данных в буфер фрейма
+            if(frame_index + len < 256) {
+                memcpy(&frame_buffer[frame_index], buf, len);
+                frame_index += len;
+            } else {
+                ESP_LOGE(TAG, "Frame buffer overflow");
+                frame_index = 0;
+            }
+            last_rx_time = xTaskGetTickCount();
+        }
+
+        // Проверка таймаута фрейма
+        if(frame_index > 0 && (xTaskGetTickCount() - last_rx_time) >= pdMS_TO_TICKS(MB_FRAME_TIMEOUT_MS)) {
+            // Проверка минимальной длины фрейма
+            if(frame_index >= 4) {
+                mb_frame_t new_frame = {
+                    .data = malloc(frame_index),
+                    .length = frame_index
+                };
+                
+                if(new_frame.data) {
+                    memcpy(new_frame.data, frame_buffer, frame_index);
+                    if(xQueueSend(frame_queue, &new_frame, pdMS_TO_TICKS(100)) != pdTRUE) {
+                        ESP_LOGE(TAG, "Queue full, frame dropped");
+                        free(new_frame.data);
+                    }
+                } else {
+                    ESP_LOGE(TAG, "Memory allocation failed");
+                }
+            } else {
+                ESP_LOGW(TAG, "Incomplete frame received");
+            }
+            
+            frame_index = 0;
+        }
+    }
+}
+
+void app_main(void) {
+    // Инициализация NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Настройка UART
+    uart_config_t uart_config = {
+        .baud_rate = MB_UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+
+    ESP_ERROR_CHECK(uart_driver_install(MB_UART_NUM, 512, 512, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(MB_UART_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(MB_UART_NUM, MB_UART_TXD_PIN, MB_UART_RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+
+    // Создание очереди и мьютекса
+    frame_queue = xQueueCreate(MB_QUEUE_SIZE, sizeof(mb_frame_t));
+    if(!frame_queue) {
+        ESP_LOGE(TAG, "Queue creation failed");
+        return;
+    }
+    
+    uart_mutex = xSemaphoreCreateMutex();
+    if(!uart_mutex) {
+        ESP_LOGE(TAG, "Mutex creation failed");
+        return;
+    }
+
+    // Создание задач
+    xTaskCreate(uart_reader_task, "uart_reader", 4096, NULL, 10, NULL);
+    xTaskCreate(frame_processor_task, "frame_processor", 4096, NULL, 10, NULL);
+
+    ESP_LOGI(TAG, "Modbus RTU Slave initialized");
+}
+```
+
+**Ключевые особенности реализации:**
+
+1. **Разделение задач**:
+   - Чтение UART с детектированием фреймов по таймауту
+   - Обработка фреймов с проверкой CRC
+   - Формирование и отправка ответов
+
+2. **Синхронизация**:
+   - Мьютекс для защиты операций записи в UART
+   - Очередь FreeRTOS для передачи фреймов между задачами
+
+3. **Проверки ошибок**:
+   - Контроль переполнения буфера
+   - Проверка CRC входящих фреймов
+   - Обработка ошибок выделения памяти
+   - Защита от переполнения очереди
+
+4. **Безопасность памяти**:
+   - Динамическое выделение памяти для каждого фрейма
+   - Гарантированное освобождение памяти
+
+5. **Соответствие протоколу**:
+   - Правильный расчет времени таймаута (3.5 символа)
+   - Корректная реализация CRC16 для Modbus
+
+**Как использовать:**
+
+1. Настройте пины UART в соответствии с вашей схемой
+2. Подстройте параметры таймаутов под используемую скорость
+3. Реализуйте необходимую логику обработки фреймов в `frame_processor_task`
+4. Добавьте обработку нужных Modbus-функций (чтение регистров, запись и т.д.)
+
+**Важные замечания:**
+
+1. Приоритеты задач должны быть правильно настроены для вашего приложения
+2. Для промышленного использования добавьте:
+   - Контроль целостности очереди
+   - Восстановление после ошибок UART
+   - Watchdog-таймеры для задач
+   - Защиту от переполнения стека задач
+3. Протестируйте с различными Modbus-мастерами
+4. Для высоких скоростей может потребоваться оптимизация буферов
+
+Этот код обеспечивает надежную основу для реализации Modbus RTU Slave с полным контролем над обработкой фреймов.
+
+======================================================================================================================

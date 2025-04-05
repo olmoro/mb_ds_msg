@@ -23,6 +23,10 @@
 // #include "esp_modbus_common.h"      // for common types
 #include "driver/uart.h"
 
+/* Обмен может выполняться на скоростях 
+    300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200 бит/с.*/
+uint32_t bauds[10] = {300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200};
+
 static const char *TAG = "PROCESSING";
 
 extern QueueHandle_t modbus_queue;
@@ -58,7 +62,28 @@ void uart_sp_init()
 
 }
 
-
+/* Функция вычисляет и возвращает циклический код для 
+  последовательности из len байтов, указанной *msg.
+  Используется порождающий полином:
+  (X в степени 16)+(X в степени 12)+(X в степени 5)+1.
+  Полиному соответствует битовая маска 0x1021.
+*/
+int CRCode(char *msg, int len)
+{
+    int j, crc = 0;
+    while (len-- > 0)
+    {
+        crc = crc ^ (int)*msg++ << 8;
+        for (j = 0; j < 8; j++)
+        {
+            if (crc & 0x8000)
+                crc = (crc << 1) ^ CRC_INIT;    //0x1021;
+            else
+                crc <<= 1;
+        }
+    }
+    return crc;
+}
 
 
 // Задача обработки PDU
