@@ -200,8 +200,8 @@ static const char *TAG = "MODBUS_SLAVE";
 void app_main() {
     // Инициализация периферии
     boardInit();
-    uart1_init();
-    //uart2_init();
+    uart_mb_init();
+    //uart_sp_init();
     
        /* Проверка RGB светодиода */
    ledsBlue();

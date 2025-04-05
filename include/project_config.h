@@ -17,7 +17,8 @@
 // ---------------------------------------------------------------------------------
 //                                  Версии 
 // ---------------------------------------------------------------------------------
-#define APP_VERSION "MB_DS_MSG 20250404.05"
+#define APP_VERSION "MB_DS_MSG 20250405.06"
+// 202500405.06:  add: init sp_uart                         RAM:  3.4%  Flash: 13.0%  
 // 202500404.04 05:  add: slave, processing                 RAM:  3.4%  Flash: 13.0%  
 // 202500404.02:  Received PDU (5 bytes): 06 00 01 00 01    RAM:  3.4%  Flash: 12.8%  
 // 202500403.01:  Проверка DeepSeek msg                     RAM:  3.4%  Flash: 12.8%
@@ -36,38 +37,42 @@
 // Входы
 #define CONFIG_GPIO_IR 19 // Вход ИК датчика
 
- 
-    // // UART1
-    // #define CONFIG_UART1_RXD          25
-    // #define CONFIG_UART1_TXD          26
-    // #define CONFIG_UART1_RTS          33
-  
-    // // UART2
-    // #define CONFIG_UART2_RXD          21
-    // #define CONFIG_UART2_TXD          23
-    // #define CONFIG_UART2_RTS          22
-
-// ---------------------------------------------------------------------------------
-//                                    MODBUS 
-// ---------------------------------------------------------------------------------
-
-#define MB_PORT_NUM UART_NUM_1
-#define BAUD_RATE 9600
+// UART1
 #define CONFIG_MB_UART_RXD 25
 #define CONFIG_MB_UART_TXD 26
 #define CONFIG_MB_UART_RTS 33
-#define SLAVE_ADDRESS 0x01
-#define MAX_PDU_LENGTH 180
-#define QUEUE_SIZE 10
-#define FRAME_TIMEOUT_MS 4 // 3.5 символа при 19200 бод
 
+// UART2
+#define CONFIG_SP_UART_RXD 21
+#define CONFIG_SP_UART_TXD 23
+#define CONFIG_SP_UART_RTS 22
+
+#define CONFIG_UART_DTS 32   // Не используется
+
+
+// ---------------------------------------------------------------------------------
+//                                    Общие 
+// ---------------------------------------------------------------------------------
 #define BUF_SIZE (512) // размер буфера
+#define MAX_PDU_LENGTH 180
 
 // Структура для PDU
 typedef struct {
     uint8_t *data;
     uint16_t length;
 } pdu_packet_t;
+
+// ---------------------------------------------------------------------------------
+//                                    MODBUS 
+// ---------------------------------------------------------------------------------
+
+#define MB_PORT_NUM UART_NUM_1
+#define MB_BAUD_RATE 9600
+#define SLAVE_ADDRESS 0x01
+#define MB_QUEUE_SIZE 10
+#define MB_FRAME_TIMEOUT_MS 4 // 3.5 символа при 19200 бод
+
+
 
 // Test
 // #define CONFIG_SLAVE_TASK_STACK_SIZE  1024 * 4
@@ -85,8 +90,8 @@ typedef struct {
 // #define ITEM_SIZE sizeof(modbus_packet_t)
 
 // Test
-#define CONFIG_STAFF_TASK_STACK_SIZE 1024 * 4
-#define CONFIG_STAFF_TASK_PRIORITY CONFIG_SLAVE_TASK_PRIORITY - 1 // 9
+// #define CONFIG_STAFF_TASK_STACK_SIZE 1024 * 4
+// #define CONFIG_STAFF_TASK_PRIORITY CONFIG_SLAVE_TASK_PRIORITY - 1 // 9
 
 // typedef struct
 // {
@@ -108,5 +113,23 @@ typedef struct {
 
 
 // ---------------------------------------------------------------------------------
+//                                    SP
+// ---------------------------------------------------------------------------------
+#define SP_PORT_NUM UART_NUM_2
+#define SP_BAUD_RATE 300        // Скорость при инициализации обмена с СПТ961
+#define SP_ADDRESS 0x00
+#define SP_QUEUE_SIZE 10
+#define SP_FRAME_TIMEOUT_MS 4 // 3.5 символа при 19200 бод
 
 // ---------------------------------------------------------------------------------
+//                                    Задачи (предварительно)
+// ---------------------------------------------------------------------------------
+
+// Размер стеков 
+#define CONFIG_MB_TASK_STACK_SIZE 1024 * 4
+#define CONFIG_PR_TASK_STACK_SIZE 1024 * 4
+
+// Приоритеты
+#define CONFIG_MB_RECEIVE_TASK_PRIORITY    5    // modbus_receive_task
+#define CONFIG_PROCESSING_TASK_PRIORITY    4    // processing_task
+

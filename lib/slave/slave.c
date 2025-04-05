@@ -28,11 +28,11 @@ QueueHandle_t modbus_queue;
 
 static portMUX_TYPE param_lock = portMUX_INITIALIZER_UNLOCKED;
 
-void uart1_init()
+void uart_mb_init()
 {
     /* Configure parameters of an UART driver, communication pins and install the driver */
-    uart_config_t uart_config = {
-        .baud_rate = BAUD_RATE,
+    uart_config_t uart_mb_config = {
+        .baud_rate = MB_BAUD_RATE,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -47,13 +47,13 @@ void uart1_init()
 #endif
 
 
-    ESP_ERROR_CHECK(uart_driver_install(MB_PORT_NUM, BUF_SIZE, BUF_SIZE, QUEUE_SIZE, NULL, 0));
+    ESP_ERROR_CHECK(uart_driver_install(MB_PORT_NUM, BUF_SIZE, BUF_SIZE, MB_QUEUE_SIZE, NULL, 0));
 
     ESP_ERROR_CHECK(uart_set_pin(MB_PORT_NUM, CONFIG_MB_UART_TXD, CONFIG_MB_UART_RXD, CONFIG_MB_UART_RTS, 32));   // IO32 свободен (трюк)
 
     ESP_ERROR_CHECK(uart_set_mode(MB_PORT_NUM, UART_MODE_RS485_HALF_DUPLEX)); // activate RS485 half duplex in the driver
 
-    ESP_ERROR_CHECK(uart_param_config(MB_PORT_NUM, &uart_config));  
+    ESP_ERROR_CHECK(uart_param_config(MB_PORT_NUM, &uart_mb_config));  
 
     ESP_LOGI(TAG, "slave_uart initialized.");
 }
@@ -77,18 +77,13 @@ static uint16_t mb_crc16(const uint8_t *buffer, size_t length) {
 }
 
 
-// void slave_task(void *arg)
-// {
-
-// }
-
 /*  Задача приёма пакета по Modbus, его проверка и отправка в очередь для стаффинга */
 void modbus_receive_task(void *arg) {
 
     //TaskQueues *queues = (TaskQueues*)arg;
     // Создание очереди
-    //queues->modbus_queue = xQueueCreate(QUEUE_SIZE, sizeof(pdu_packet_t));
-    modbus_queue = xQueueCreate(QUEUE_SIZE, sizeof(pdu_packet_t));
+    //queues->modbus_queue = xQueueCreate(MB_QUEUE_SIZE, sizeof(pdu_packet_t));
+    modbus_queue = xQueueCreate(MB_QUEUE_SIZE, sizeof(pdu_packet_t));
 
     uint8_t *frame_buffer = NULL;
     uint16_t frame_length = 0;
@@ -120,7 +115,7 @@ void modbus_receive_task(void *arg) {
         }
 
         // Проверка завершения фрейма
-        if(frame_buffer && (xTaskGetTickCount() - last_rx_time) > pdMS_TO_TICKS(FRAME_TIMEOUT_MS)) {
+        if(frame_buffer && (xTaskGetTickCount() - last_rx_time) > pdMS_TO_TICKS(MB_FRAME_TIMEOUT_MS)) {
             // Минимальная длина фрейма: адрес + функция + CRC
             if(frame_length < 4) {
                 ESP_LOGE(TAG, "Invalid frame length: %d", frame_length);
@@ -167,8 +162,8 @@ void modbus_receive_task(void *arg) {
 
             memcpy(pdu.data, frame_buffer + 1, pdu.length);
             
-            ledGreenToggle(); // По факту отправки в очередь
-            ledBlueToggle();
+    ledGreenToggle(); // По факту отправки в очередь
+    ledBlueToggle();
 
 
             // Отправка в очередь

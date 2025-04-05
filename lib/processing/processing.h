@@ -14,10 +14,7 @@ extern "C"
 {
 #endif
 
-void uart2_init();
-
-// //void slave_task(void *arg);
-// void uart_receive_task(void *arg);
+void uart_sp_init();
 
 //void pdu_processing_task(void *arg);
 void processing_task(void *arg);

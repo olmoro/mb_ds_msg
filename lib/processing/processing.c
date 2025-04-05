@@ -27,17 +27,39 @@ static const char *TAG = "PROCESSING";
 
 extern QueueHandle_t modbus_queue;
 
-void uart2_init()
+void uart_sp_init()
 {
+    /* Configure parameters of an UART driver, communication pins and install the driver */
+    uart_config_t uart_sp_config = {
+        .baud_rate = SP_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,  // RTS для управления направлением DE/RE !!
+        .rx_flow_ctrl_thresh = 122,
+    };
+
+    int intr_alloc_flags = 0;
+
+#if CONFIG_UART_ISR_IN_IRAM
+    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+#endif
+
+
+    ESP_ERROR_CHECK(uart_driver_install(SP_PORT_NUM, BUF_SIZE, BUF_SIZE, SP_QUEUE_SIZE, NULL, 0));
+
+    ESP_ERROR_CHECK(uart_set_pin(SP_PORT_NUM, CONFIG_SP_UART_TXD, CONFIG_SP_UART_RXD, CONFIG_SP_UART_RTS, 32));   // IO32 свободен (трюк)
+
+    ESP_ERROR_CHECK(uart_set_mode(SP_PORT_NUM, UART_MODE_RS485_HALF_DUPLEX)); // activate RS485 half duplex in the driver
+
+    ESP_ERROR_CHECK(uart_param_config(SP_PORT_NUM, &uart_sp_config));  
+
+    ESP_LOGI(TAG, "sp_uart initialized.");
 
 }
 
 
-// //void pdu_processing_task(void *arg);
-// void pdu_processing_task(void *arg)
-// {
 
-// }
 
 // Задача обработки PDU
 void processing_task(void *arg) {
