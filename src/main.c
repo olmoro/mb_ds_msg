@@ -223,12 +223,20 @@ void app_main() {
     }
     ESP_LOGI(TAG, "Modbus Receive task created successfully");
 
-
-    BaseType_t processing_task_handle = xTaskCreate(processing_task, "processing", 4096, NULL, 4, NULL);
-    if (!processing_task_handle)
+    BaseType_t modbus_send_task_handle = xTaskCreate(mb_send_task, "mb_send", 4096, NULL, 4, NULL);
+    if (!modbus_send_task_handle)
     {
-        ESP_LOGE(TAG, "Failed to create Processing task");
+        ESP_LOGE(TAG, "Failed to create MB Send task");
         return;
     }
-    ESP_LOGI(TAG, "Processing task created successfully");
+    ESP_LOGI(TAG, "MB Send task created successfully");
+
+    // BaseType_t processing_task_handle = xTaskCreate(processing_task, "processing", 4096, NULL, 4, NULL);
+    // if (!processing_task_handle)
+    // {
+    //     ESP_LOGE(TAG, "Failed to create Processing task");
+    //     return;
+    // }
+    // ESP_LOGI(TAG, "Processing task created successfully");
+
 }

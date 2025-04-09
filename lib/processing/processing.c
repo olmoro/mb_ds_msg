@@ -86,26 +86,26 @@ int CRCode(char *msg, int len)
 }
 
 
-// Задача обработки PDU
-void processing_task(void *arg) {
-  //  TaskQueues *queues = (TaskQueues*)arg;
-    pdu_packet_t pdu;
+// // Задача обработки PDU
+// void processing_task(void *arg) {
+//   //  TaskQueues *queues = (TaskQueues*)arg;
+//     pdu_packet_t pdu;
 
-    while(1) 
-    {
-        // Прием сообщения от modbus_receive_task
-        //if(xQueueReceive(queues->modbus_queue, &pdu, portMAX_DELAY)) {
-        if(xQueueReceive(modbus_queue, &pdu, portMAX_DELAY)) {
-            // Обработка данных
-            ESP_LOGI(TAG, "Received PDU (%d bytes):", pdu.length);
-            for(int i = 0; i < pdu.length; i++) {
-                printf("%02X ", pdu.data[i]);
-            }
-            printf("\n");
+//     while(1) 
+//     {
+//         // Прием сообщения от modbus_receive_task
+//         //if(xQueueReceive(queues->modbus_queue, &pdu, portMAX_DELAY)) {
+//         if(xQueueReceive(modbus_queue, &pdu, portMAX_DELAY)) {
+//             // Обработка данных
+//             ESP_LOGI(TAG, "Received PDU (%d bytes):", pdu.length);
+//             for(int i = 0; i < pdu.length; i++) {
+//                 printf("%02X ", pdu.data[i]);
+//             }
+//             printf("\n");
            
-    ledsGreen();        
+//  //   ledsGreen();        
 
-            free(pdu.data); // Освобождение памяти
-        }
-    }
-}
+//             free(pdu.data); // Освобождение памяти
+//         }
+//     }
+// }
