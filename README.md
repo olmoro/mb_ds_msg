@@ -2071,4 +2071,64 @@ void app_main(void) {
 
 Этот код обеспечивает надежную основу для реализации Modbus RTU Slave с полным контролем над обработкой фреймов.
 
-======================================================================================================================
+======================================================================================================================// Задача отправления ответа
+
+
+void mb_send_task(void *arg) 
+{
+    pdu_packet_t pdu;
+
+    while(1) 
+    {
+       // mb_frame_t frame;   // структура
+
+        //if(xQueueReceive(frame_queue, &frame, portMAX_DELAY) 
+        if(xQueueReceive(modbus_queue, &pdu, portMAX_DELAY))        // Test
+        {
+
+            // Обработка данных
+            ESP_LOGI(TAG, "Received PDU (%d bytes):", pdu.length);
+            for(int i = 0; i < pdu.length; i++) 
+            {
+                printf("%02X ", pdu.data[i]);
+            }
+            printf("\n");
+           
+                //ledsGreen();        
+            ledsOn();        
+
+            // // Проверка минимальной длины фрейма
+            // if(pdu.length < 4) {
+            //     ESP_LOGE(TAG, "Invalid pdu length: %d", pdu.length);
+            //     free(pdu.data);
+            //     continue;
+            // }
+
+            // Формирование ответа
+        
+            uint8_t response[pdu.length + 2];
+            memcpy(response, pdu.data, pdu.length);
+
+            // Расчет CRC для ответа
+            uint16_t response_crc = mb_crc16(response, pdu.length);
+            response[pdu.length] = response_crc & 0xFF;
+            response[pdu.length + 1] = response_crc >> 8;
+       
+            ESP_LOGI(TAG, "Response (%d bytes):", pdu.length+2);
+            for(int i = 0; i < pdu.length + 2; i++) 
+            {
+                printf("%02X ", response[i]);
+            }
+            printf("\n");
+
+            // Отправка ответа с синхронизацией
+            xSemaphoreTake(uart_mutex, portMAX_DELAY);
+            uart_write_bytes(MB_PORT_NUM, (const char *)response, sizeof(response));
+            xSemaphoreGive(uart_mutex);
+
+            ledsBlue();        
+
+            free(pdu.data);
+        }
+    }
+}
