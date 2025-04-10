@@ -6,7 +6,7 @@
 #include "project_config.h"
 #include "board.h"
 #include "slave.h"
-#include "processing.h"
+#include "processor.h"
 
 static const char *TAG = "MODBUS_MAIN";
 
@@ -15,7 +15,7 @@ void app_main()
     // Инициализация периферии
     boardInit();
     uart_mb_init();
-    // uart_sp_init();
+    uart_sp_init();
 
     /* Проверка RGB светодиода */
     ledsBlue();
@@ -37,11 +37,11 @@ void app_main()
     }
     ESP_LOGI(TAG, "MB Send task created successfully");
 
-    // BaseType_t processing_task_handle = xTaskCreate(processing_task, "processing", 4096, NULL, 4, NULL);
-    // if (!processing_task_handle)
-    // {
-    //     ESP_LOGE(TAG, "Failed to create Processing task");
-    //     return;
-    // }
-    // ESP_LOGI(TAG, "Processing task created successfully");
+    BaseType_t processor_task_handle = xTaskCreate(frame_processor_task, "processor", 4096, NULL, 3, NULL);
+    if (!processor_task_handle)
+    {
+        ESP_LOGE(TAG, "Failed to create Processor task");
+        return;
+    }
+    ESP_LOGI(TAG, "Processor task created successfully");
 }

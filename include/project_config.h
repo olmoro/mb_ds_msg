@@ -25,7 +25,7 @@
 // 202500404.02:  Received PDU (5 bytes): 06 00 01 00 01    RAM:  3.4%  Flash: 12.8%  
 // 202500403.01:  Проверка DeepSeek msg                     RAM:  3.4%  Flash: 12.8%
 
-
+#define TEST_MODBUS
 
 // ---------------------------------------------------------------------------------
 //                                  GPIO
@@ -112,7 +112,7 @@ typedef struct {
 // typedef struct
 // {
 //     QueueHandle_t modbus_queue;    // От Modbus к SPnet
-//     QueueHandle_t processing_queue; // От SPnet к Modbus
+//     QueueHandle_t process_queue; // От SPnet к Modbus
 // } TaskQueues;
 
 

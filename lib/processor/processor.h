@@ -4,8 +4,8 @@
  *  
  *  
  *====================================================================================*/
-#ifndef _PROCESSING_H_
-#define _PROCESSING_H_
+#ifndef _PROCESSOR_H_
+#define _PROCESSOR_H_
 
 
 
@@ -16,12 +16,11 @@ extern "C"
 
 void uart_sp_init();
 
-                //void pdu_processing_task(void *arg);
-//void processing_task(void *arg);
+void frame_processor_task(void *arg);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // _PROCESSING_H_
+#endif // _PROCESSOR_H_
